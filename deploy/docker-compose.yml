@@ -1,0 +1,34 @@
+# gopher-blog serving stack for the VPS.
+#
+# The image is self-contained: geomyidae + the baked phlog tree (see ../Dockerfile).
+# It serves on :7071, the sibling port to gopher-cta's :70. The EXISTING cta
+# Watchtower (started with --label-enable on the same Docker daemon) auto-updates
+# this container whenever CI publishes a fresh ghcr :latest — no Watchtower here.
+#
+#   docker compose -f deploy/docker-compose.yml up -d     # pull + start
+#   docker compose -f deploy/docker-compose.yml logs -f   # access log
+#
+# The daemon is wrapped in a shell so its access log is tee'd to the SAME host
+# file gopher-cta uses (/var/log/gopher/geomyidae.log), so the existing
+# visitor-analytics pipeline picks up phlog hits for free — blog selectors
+# (/posts, /tags, ...) are distinguishable from cta's (/map.txt, /red, ...).
+# That host dir must be writable by uid 65534 (geomyidae's `nobody`); the cta
+# deploy already does:  sudo mkdir -p /var/log/gopher && sudo chown 65534:65534 /var/log/gopher
+services:
+  gopher-blog:
+    image: ghcr.io/felipedbene/gopher-blog:latest
+    container_name: gopher-blog
+    pull_policy: always
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        geomyidae -d -b /srv -p 7071
+        2>&1 | tee -a /var/log/gopher/geomyidae.log
+    ports:
+      - "7071:7071"
+    volumes:
+      - /var/log/gopher:/var/log/gopher
+    restart: unless-stopped
+    labels:
+      # Auto-updated by the cta stack's Watchtower (label-enable, same daemon).
+      - com.centurylinklabs.watchtower.enable=true

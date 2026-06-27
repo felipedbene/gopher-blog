@@ -82,6 +82,13 @@ cargo fmt --check
 DEBENE_CONTENT=../debene-dev/content cargo test real_posts -- --ignored --nocapture
 ```
 
+## Deploy
+
+Production runs as a single immutable container (geomyidae + the baked tree) on
+the same VPS as gopher-cta, on `:7071`. CI publishes
+`ghcr.io/felipedbene/gopher-blog:latest` (multi-arch); the cta Watchtower swaps
+it on each new digest. See [`deploy/DEPLOY.md`](deploy/DEPLOY.md).
+
 ## License
 
 MIT.
