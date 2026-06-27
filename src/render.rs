@@ -225,7 +225,7 @@ fn facets(posts: &[Post], pick: impl Fn(&Post) -> &[String]) -> Vec<Facet> {
             }
         }
     }
-    out.sort_by(|a, b| a.display.to_lowercase().cmp(&b.display.to_lowercase()));
+    out.sort_by_key(|f| f.display.to_lowercase());
     out
 }
 
