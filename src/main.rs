@@ -4,6 +4,7 @@
 //! One shot: discover -> render -> publish -> exit. No loop, no network, no async.
 
 mod content;
+mod markdown;
 mod publish;
 mod render;
 
@@ -76,7 +77,16 @@ fn run(cfg: &Config) -> Result<(), String> {
     let posts = content::discover(&cfg.content).map_err(|e| format!("discover posts: {e}"))?;
     println!("discovered {} non-draft post(s)", posts.len());
     if let Some(newest) = posts.first() {
-        println!("  newest: {}  {}", newest.date, newest.title);
+        // Exercise the markdown renderer on the newest post (full page assembly
+        // lands in commit 4); report what it produced.
+        let rendered = markdown::render(&newest.body, &newest.slug);
+        println!(
+            "  newest: {}  {} ({} body lines, {} footnotes)",
+            newest.date,
+            newest.title,
+            rendered.body.lines().count(),
+            rendered.footnotes.len(),
+        );
     }
 
     let mut root = vec![
