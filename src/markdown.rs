@@ -93,6 +93,14 @@ fn wrap_into(text: &str, width: usize, first: &str, cont: &str, out: &mut Vec<St
     out.push(format!("{prefix}{cur}"));
 }
 
+/// Word-wrap `text` to `width`, returning the lines (no prefixes). Public so the
+/// page builder can wrap titles / meta lines with the same greedy algorithm.
+pub fn wrap(text: &str, width: usize) -> Vec<String> {
+    let mut out = Vec::new();
+    wrap_into(text, width, "", "", &mut out);
+    out
+}
+
 /// A list nesting frame: `Some(next)` is an ordered list (with the next item
 /// number), `None` a bullet list.
 struct ListFrame {

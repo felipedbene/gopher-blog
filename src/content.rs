@@ -10,8 +10,9 @@ use yaml_rust2::{Yaml, YamlLoader};
 
 /// One parsed post. `body` is the raw markdown after the closing frontmatter
 /// fence (handed to [`crate::markdown`] for rendering).
-// The render layer (commit 4) consumes every field; until then a few are only
-// read in tests, so silence dead-code on the plain bin build.
+// `categories` and `description` are parsed for completeness (part of the Hugo
+// frontmatter model) but not surfaced in the tree yet — the phlog facets on tags
+// and series only. Allow them to sit unused rather than drop them from the model.
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub struct Post {

@@ -72,57 +72,84 @@ fn run(cfg: &Config) -> Result<(), String> {
         ));
     }
 
-    // Discover posts (drafts skipped, newest-first). Page rendering of these
-    // lands in commit 4; for now we report what was found.
+    // Discover posts (drafts skipped, newest-first).
     let posts = content::discover(&cfg.content).map_err(|e| format!("discover posts: {e}"))?;
     println!("discovered {} non-draft post(s)", posts.len());
-    if let Some(newest) = posts.first() {
-        // Exercise the markdown renderer on the newest post (full page assembly
-        // lands in commit 4); report what it produced.
-        let rendered = markdown::render(&newest.body, &newest.slug);
-        println!(
-            "  newest: {}  {} ({} body lines, {} footnotes)",
-            newest.date,
-            newest.title,
-            rendered.body.lines().count(),
-            rendered.footnotes.len(),
-        );
-    }
 
-    let mut root = vec![
-        render::info("==============================================="),
-        render::info("  gopher-blog : debene.dev over Gopher"),
-        render::info("==============================================="),
-        render::info(""),
-        render::link(render::ItemKind::Menu, "Posts", "/posts"),
-        render::link(render::ItemKind::Menu, "Tags", "/tags"),
-        render::link(render::ItemKind::Menu, "Series", "/series"),
-        render::link(render::ItemKind::Text, "About", "/about.txt"),
-    ];
-    if let Some((host, port)) = &cfg.cta_link {
-        root.push(render::link_remote(
-            render::ItemKind::Menu,
-            "Live CTA trains (gopher-cta)",
-            "/",
-            host.clone(),
-            *port,
-        ));
-    }
-    let root = render::with_host(root, &cfg.host, cfg.port);
-
-    let files: Vec<publish::TreeFile> = vec![(
-        "index.gph".to_string(),
-        publish::render_menu_index(&root).into_bytes(),
-    )];
+    let files = build_tree(&posts, cfg);
 
     let snap = publish::publish(&cfg.out, &files, cfg.keep)
         .map_err(|e| format!("publish to {}: {e}", cfg.out.display()))?;
     println!(
-        "published {} -> {}",
+        "published {} files: {} -> {}",
+        files.len(),
         snap.display(),
         cfg.out.join("current").display()
     );
     Ok(())
+}
+
+/// Render the full gopher tree into a publishable file map.
+fn build_tree(posts: &[content::Post], cfg: &Config) -> Vec<publish::TreeFile> {
+    let mut files: Vec<publish::TreeFile> = Vec::new();
+
+    // Local closure: serialize a menu, stamping the tree's own host/port.
+    let menu = |entries: Vec<render::Entry>| -> Vec<u8> {
+        publish::render_menu_index(&render::with_host(entries, &cfg.host, cfg.port)).into_bytes()
+    };
+
+    let cta = cfg.cta_link.as_ref().map(|(h, p)| (h.as_str(), *p));
+
+    // Root + section indexes.
+    files.push(("index.gph".into(), menu(render::root_menu(cta))));
+    files.push(("posts/index.gph".into(), menu(render::posts_index(posts))));
+    files.push(("tags/index.gph".into(), menu(render::tags_index(posts))));
+    files.push(("series/index.gph".into(), menu(render::series_index(posts))));
+
+    // About: render content/about.md if present, else a stub.
+    let about_src = read_about(&cfg.content);
+    files.push((
+        "about.txt".into(),
+        render::about_page(about_src.as_deref()).into_bytes(),
+    ));
+
+    // One text page per post.
+    for p in posts {
+        files.push((
+            format!("posts/{}.txt", p.slug),
+            render::post_page(p).into_bytes(),
+        ));
+    }
+
+    // One menu file per tag / series facet.
+    for f in render::tag_facets(posts) {
+        files.push((
+            format!("tags/{}.gph", f.slug),
+            menu(render::tag_menu(posts, &f)),
+        ));
+    }
+    for f in render::series_facets(posts) {
+        files.push((
+            format!("series/{}.gph", f.slug),
+            menu(render::series_menu(posts, &f)),
+        ));
+    }
+
+    files
+}
+
+/// Read `content/about.md`, stripping a leading YAML frontmatter block if any.
+/// Returns `None` if the file is absent.
+fn read_about(content: &std::path::Path) -> Option<String> {
+    let raw = std::fs::read_to_string(content.join("about.md")).ok()?;
+    let body = match raw.strip_prefix("---\n") {
+        Some(after) => after
+            .split_once("\n---\n")
+            .map(|(_, b)| b.to_string())
+            .unwrap_or(raw.clone()),
+        None => raw,
+    };
+    Some(body)
 }
 
 /// Hand-rolled flag parser (no clap; keeps the dep list minimal). Returns
