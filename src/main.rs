@@ -5,8 +5,10 @@
 
 mod content;
 mod markdown;
-mod publish;
 mod render;
+
+/// Snapshots to retain by default (the `--keep` default).
+const DEFAULT_KEEP: usize = 3;
 
 use std::path::PathBuf;
 use std::process;
@@ -78,7 +80,7 @@ fn run(cfg: &Config) -> Result<(), String> {
 
     let files = build_tree(&posts, cfg);
 
-    let snap = publish::publish(&cfg.out, &files, cfg.keep)
+    let snap = gopher_core::publish(&cfg.out, &files, cfg.keep)
         .map_err(|e| format!("publish to {}: {e}", cfg.out.display()))?;
     println!(
         "published {} files: {} -> {}",
@@ -90,12 +92,13 @@ fn run(cfg: &Config) -> Result<(), String> {
 }
 
 /// Render the full gopher tree into a publishable file map.
-fn build_tree(posts: &[content::Post], cfg: &Config) -> Vec<publish::TreeFile> {
-    let mut files: Vec<publish::TreeFile> = Vec::new();
+fn build_tree(posts: &[content::Post], cfg: &Config) -> Vec<gopher_core::TreeFile> {
+    let mut files: Vec<gopher_core::TreeFile> = Vec::new();
 
     // Local closure: serialize a menu, stamping the tree's own host/port.
     let menu = |entries: Vec<render::Entry>| -> Vec<u8> {
-        publish::render_menu_index(&render::with_host(entries, &cfg.host, cfg.port)).into_bytes()
+        gopher_core::render_menu_index(&render::with_host(entries, &cfg.host, cfg.port))
+            .into_bytes()
     };
 
     let cta = cfg.cta_link.as_ref().map(|(h, p)| (h.as_str(), *p));
@@ -160,7 +163,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Option<Config>, Stri
     let mut host = "gopher.debene.dev".to_string();
     let mut port: u16 = 70;
     let mut cta_link_raw = "gopher://gopher.debene.dev:70".to_string();
-    let mut keep = publish::KEEP_SNAPSHOTS;
+    let mut keep = DEFAULT_KEEP;
 
     let mut args = args.peekable();
     while let Some(arg) = args.next() {

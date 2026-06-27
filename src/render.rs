@@ -3,7 +3,7 @@
 //! No sockets, no gopher protocol bytes, no daemon-specific formatting — this is
 //! the testable core. Text pages come out as plain `String`s; menus come out as
 //! a daemon-agnostic [`Vec<Entry>`]. Turning entries into a specific daemon's
-//! index format (geomyidae `.gph`) happens in [`crate::publish`], not here.
+//! index format (geomyidae `.gph`) is `gopher_core::render_menu_index`, not here.
 //!
 //! Selectors are the gopher selectors as served from the tree root, i.e. the
 //! on-disk paths the publisher writes (`/index.gph`, `/posts/<slug>.txt`, ...).
@@ -11,103 +11,34 @@
 use crate::content::Post;
 use crate::markdown;
 
-// EXTRACTION CANDIDATE -> gopher-core (extract once blog v1 renders; see DESIGN).
-// Keep byte-identical to gopher-cta until then. Any edit here MUST also land in cta.
-// NOTE: this block carries the *settled* `Entry` shape — `Entry::Link` already has
-// the `host`/`port` fields the gopher-cta cross-link commit adds; both copies are
-// the pre-`gopher-core` API and must stay in sync.
-
-/// Gopher item type for a link. Daemon-agnostic; serialized per-daemon elsewhere.
-///
-/// `Url`/`Bin` are carried verbatim from the copied spine; the blog's menus only
-/// use `Text`/`Menu`, but the variants stay so the serializer matches cta's.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
-pub enum ItemKind {
-    Text, // gopher type 0
-    Menu, // gopher type 1
-    Url,  // gopher type h -- external link, selector is `URL:<addr>`
-    Bin,  // gopher type 9 -- binary download
-}
-
-/// One line of a menu: either an info line (not selectable) or a link.
-///
-/// `host`/`port` are normally `None` — the serializer then emits geomyidae's own
-/// host/port placeholders, so the tree stays address-agnostic. They are `Some`
-/// only for cross-server links (the hub link back to the cta hole), which must
-/// advertise a concrete address the client dials directly.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Entry {
-    Info(String),
-    Link {
-        kind: ItemKind,
-        display: String,
-        selector: String,
-        host: Option<String>,
-        port: Option<u16>,
-    },
-}
-
-/// An info (non-selectable) line.
-pub fn info(s: impl Into<String>) -> Entry {
-    Entry::Info(s.into())
-}
-
-/// A link served from this tree (host/port default to the daemon's own).
-pub fn link(kind: ItemKind, display: impl Into<String>, selector: impl Into<String>) -> Entry {
-    Entry::Link {
-        kind,
-        display: display.into(),
-        selector: selector.into(),
-        host: None,
-        port: None,
-    }
-}
-
-/// A link to a *different* gopher server: the `.gph` line advertises this
-/// host/port so the client opens a fresh connection there.
-pub fn link_remote(
-    kind: ItemKind,
-    display: impl Into<String>,
-    selector: impl Into<String>,
-    host: impl Into<String>,
-    port: u16,
-) -> Entry {
-    Entry::Link {
-        kind,
-        display: display.into(),
-        selector: selector.into(),
-        host: Some(host.into()),
-        port: Some(port),
-    }
-}
-// END EXTRACTION CANDIDATE.
+// The menu model + serializer now live in the shared `gopher-core` crate. We
+// re-export the bits the page builders and `main` use so call sites stay
+// `render::Entry` / `render::link` / etc.
+pub use gopher_core::{info, link, Entry, ItemKind};
 
 /// Stamp local links (those with no explicit host) with the tree's own
 /// host/port, so generated `.gph` lines advertise a concrete address rather than
 /// relying on the daemon's placeholder substitution (`--host`/`--port`). Info
 /// lines and cross-server links (which already carry a host) are left untouched.
 ///
-/// Blog-specific: gopher-cta leaves local links as placeholder tokens. Lives
-/// outside the extraction block.
+/// Blog-specific: gopher-cta leaves local links as placeholder tokens, so this
+/// stays in the consumer (built on core's [`Entry::with_host`]).
 pub fn with_host(entries: Vec<Entry>, host: &str, port: u16) -> Vec<Entry> {
     entries
         .into_iter()
-        .map(|e| match e {
-            Entry::Link {
-                kind,
-                display,
-                selector,
-                host: None,
-                port: None,
-            } => Entry::Link {
-                kind,
-                display,
-                selector,
-                host: Some(host.to_string()),
-                port: Some(port),
-            },
-            other => other,
+        .map(|e| {
+            if matches!(
+                e,
+                Entry::Link {
+                    host: None,
+                    port: None,
+                    ..
+                }
+            ) {
+                e.with_host(host, port)
+            } else {
+                e
+            }
         })
         .collect()
 }
@@ -177,13 +108,7 @@ pub fn root_menu(cta_link: Option<(&str, u16)>) -> Vec<Entry> {
     e.push(link(ItemKind::Text, "About", "/about.txt"));
     if let Some((host, port)) = cta_link {
         e.push(info(""));
-        e.push(link_remote(
-            ItemKind::Menu,
-            "Live CTA trains (gopher-cta)",
-            "/",
-            host,
-            port,
-        ));
+        e.push(link(ItemKind::Menu, "Live CTA trains (gopher-cta)", "/").with_host(host, port));
     }
     e
 }
@@ -546,5 +471,28 @@ mod tests {
         let page = about_page(None);
         assert!(page.contains("About"));
         assert!(page.contains("https://debene.dev/"));
+    }
+
+    // Byte-golden: locks the serialized /posts index .gph through the
+    // gopher-core serializer + host stamping. Guards the extraction (and any
+    // future change) against silent drift in the on-the-wire format.
+    #[test]
+    fn posts_index_gph_byte_golden() {
+        let posts = vec![
+            post("a-slug", "2026-06-23", "First Post", &[], &[], ""),
+            post("b-slug", "2026-01-02", "Second Post", &[], &[], ""),
+        ];
+        let gph = gopher_core::render_menu_index(&with_host(
+            posts_index(&posts),
+            "gopher.debene.dev",
+            7071,
+        ));
+        let expected = format!(
+            "{BANNER}\n  Posts (newest first)\n{BANNER}\n\n\
+             [0|2026-06-23  First Post|/posts/a-slug.txt|gopher.debene.dev|7071]\n\
+             [0|2026-01-02  Second Post|/posts/b-slug.txt|gopher.debene.dev|7071]\n\
+             \n[1|Back to root|/|gopher.debene.dev|7071]\n"
+        );
+        assert_eq!(gph, expected);
     }
 }

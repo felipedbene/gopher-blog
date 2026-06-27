@@ -48,9 +48,15 @@ dependencies = [
 name = "gopher-blog"
 version = "0.1.0"
 dependencies = [
+ "gopher-core",
  "pulldown-cmark",
  "yaml-rust2",
 ]
+
+[[package]]
+name = "gopher-core"
+version = "0.1.0"
+source = "git+https://github.com/felipedbene/gopher-core?tag=v0.1.0#5c276d97c014b3080ffe9e735a23d2b181125b98"
 
 [[package]]
 name = "hashbrown"

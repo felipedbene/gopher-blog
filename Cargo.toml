@@ -10,6 +10,10 @@ name = "gopher-blog"
 path = "src/main.rs"
 
 [dependencies]
+# The shared gopher spine (menu model, .gph serializer, atomic publish). Pinned
+# by tag so the image build resolves it with only this repo checked out, and so
+# we bump core on our own schedule.
+gopher-core = { git = "https://github.com/felipedbene/gopher-core", tag = "v0.1.0" }
 # Markdown parsing. Actively maintained (0.13.x, 2026); the de-facto CommonMark
 # parser in the Rust ecosystem.
 pulldown-cmark = "=0.13.4"
