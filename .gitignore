@@ -1,0 +1,5 @@
+/target
+/out
+Cargo.lock.orig
+.env
+.DS_Store

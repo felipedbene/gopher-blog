@@ -1,0 +1,19 @@
+[package]
+name = "gopher-blog"
+version = "0.1.0"
+edition = "2021"
+description = "Render the debene.dev Hugo blog into a static gopher (phlog) tree."
+license = "MIT"
+
+[[bin]]
+name = "gopher-blog"
+path = "src/main.rs"
+
+[dependencies]
+# Markdown parsing. Actively maintained (0.13.x, 2026); the de-facto CommonMark
+# parser in the Rust ecosystem.
+pulldown-cmark = "=0.13.4"
+# YAML frontmatter. Maintained successor to the archived `yaml-rust`; pure-Rust,
+# no serde/proc-macro machinery — we pull a handful of fields out of `Yaml`
+# directly. (serde_yaml is archived/unmaintained; avoided on purpose.)
+yaml-rust2 = "=0.11.0"
