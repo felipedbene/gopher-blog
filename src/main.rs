@@ -3,6 +3,7 @@
 //!
 //! One shot: discover -> render -> publish -> exit. No loop, no network, no async.
 
+mod content;
 mod publish;
 mod render;
 
@@ -68,6 +69,14 @@ fn run(cfg: &Config) -> Result<(), String> {
             "--content {} is not a directory",
             cfg.content.display()
         ));
+    }
+
+    // Discover posts (drafts skipped, newest-first). Page rendering of these
+    // lands in commit 4; for now we report what was found.
+    let posts = content::discover(&cfg.content).map_err(|e| format!("discover posts: {e}"))?;
+    println!("discovered {} non-draft post(s)", posts.len());
+    if let Some(newest) = posts.first() {
+        println!("  newest: {}  {}", newest.date, newest.title);
     }
 
     let mut root = vec![
