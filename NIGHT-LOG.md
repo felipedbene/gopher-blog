@@ -67,17 +67,18 @@ fio #1 for the planned extraction.
 - **Static link integrity:** all 546 menu link lines well-formed (5 `.gph`
   fields, valid type char, no tabs); every local selector resolves to a real file
   in the tree; the single cta hub link points at `:70`.
-- **Live geomyidae browse — TODO (manual):** geomyidae isn't installed locally
-  (not in brew; building the upstream C source was out of scope for an
-  unsupervised run). Point it at a snapshot and browse with Bombadillo / Lagrange:
-  ```sh
-  gopher-blog --content ../debene-dev/content --out ./out --port 7071
-  geomyidae -b ./out/current -p 7071 -h 127.0.0.1
-  lynx gopher://127.0.0.1:7071/
-  ```
+- **Live in production (2026-06-27):** deployed to the RackNerd VPS as the
+  immutable image on `:7071`. Verified end-to-end over the public IP:
+  `gopher://gopher.debene.dev:7071/` serves the root menu; `/posts` lists
+  newest-first; post pages render framed. The hub closes both ways — cta `:70`
+  root shows `Phlog -- the blog → gopher.debene.dev:7071`, and the blog root links
+  back to `Live CTA trains → :70`. The cta Watchtower (same daemon, label-enable)
+  auto-updates the blog on each CI publish; CI rebuilds daily against debene-dev.
+  Deploy runbook: [`deploy/DEPLOY.md`](deploy/DEPLOY.md).
 
 ## Follow-up fios (not this session)
 
 1. Extract `gopher-core` once `Entry` settles; cta + blog both depend on it.
-2. Deploy: Dockerfile `FROM geomyidae`, CI image, Watchtower swap.
+2. Content-triggered rebuilds: `repository_dispatch` from a `debene-dev` push →
+   instant blog rebuild (the daily CI schedule covers it for now).
 3. Web gateway at `https://debene.dev/gopher/` (additive).
